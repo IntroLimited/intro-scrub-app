@@ -232,7 +232,7 @@ class handler(BaseHTTPRequestHandler):
                 special_filter = form.get('special_filter','').strip()
                 role_filter = form.get('role_filter','').strip()
                 last_contact = form.get('last_contact_months','').strip()
-                stages = json.loads(form.get('stages','["Intro Interviewed","Connection"]'))
+                stages = json.loads(form.get('stages','[]'))
                 mode = form.get('mode','view')
                 tag_name = form.get('tag_name','').strip()
                 file_bytes = form.get('file_bytes', b'')
