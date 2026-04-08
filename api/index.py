@@ -51,61 +51,53 @@ def extract_text_from_docx(file_bytes):
         try: os.unlink(tmp)
         except: pass
 
-def claude_request(prompt, max_tokens=2000):
-    payload = {
-        "model": "claude-sonnet-4-20250514",
-        "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01"},
-        method="POST"
-    )
-    with urllib.request.urlopen(req, timeout=55) as resp:
-        result = json.loads(resp.read())
-    text = result["content"][0]["text"].strip()
-    text = re.sub(r'^```json\s*', '', text)
-    text = re.sub(r'\s*```$', '', text)
-    return text
+def extract_keywords(text):
+    """Extract meaningful keywords from text for matching."""
+    # Remove common stop words and extract meaningful terms
+    stop_words = {'the','a','an','and','or','but','in','on','at','to','for','of','with',
+                  'is','are','was','were','be','been','have','has','had','do','does','did',
+                  'will','would','could','should','may','might','must','shall','can',
+                  'this','that','these','those','we','you','they','he','she','it','i',
+                  'our','your','their','its','my','his','her','who','which','what','how',
+                  'when','where','why','all','each','every','both','few','more','most',
+                  'other','some','such','no','nor','not','only','own','same','so','than',
+                  'too','very','just','about','above','after','before','between','into',
+                  'through','during','including','while','although','because','since',
+                  'report','role','position','looking','seeking','candidate','experience',
+                  'work','working','team','company','brand','business','years','year'}
+    
+    words = re.findall(r'\b[a-zA-Z][a-zA-Z0-9+#\-]{2,}\b', text.lower())
+    keywords = [w for w in words if w not in stop_words and len(w) > 2]
+    
+    # Also extract multi-word phrases that are likely meaningful
+    phrases = re.findall(r'\b(?:email marketing|lifecycle marketing|ecommerce|e-commerce|social media|content marketing|paid media|growth marketing|brand marketing|digital marketing|product management|supply chain|general manager|creative director|art director|design director|marketing manager|klaviyo|shopify|salesforce|google analytics|facebook ads|instagram|tiktok|linkedin|dtc|b2b|b2c|saas|crm|sms|roi|kpi|ltv|cac|ctr|roas)\b', text.lower())
+    
+    return list(set(keywords[:50] + phrases))
 
-def extract_criteria(doc_text, keywords):
-    prompt = f"""Extract recruiting search criteria from this content.
-
-Document:
-{doc_text}
-
-Recruiter notes:
-{keywords}
-
-Return ONLY JSON:
-{{"job_title":"","keywords":[],"comp_min":0,"comp_max":0,"location":"","summary":""}}
-
-keywords: include titles, skills, tools, platforms, industries. comp in thousands (85k=85). summary: 2 sentences on ideal candidate."""
-    return json.loads(claude_request(prompt, 1000))
-
-def batch_score(candidates, criteria_text):
-    """Score up to 50 candidates in one Claude call."""
-    lines = []
-    for i, c in enumerate(candidates[:50]):
-        notes = c.get("notes","")[:400]
-        lines.append(f"{i}|{c.get('name','')}|{c.get('current_company','')}|{c.get('former_companies','')}|{c.get('tags_str','')}|{c.get('location','')}|{notes}")
-
-    prompt = f"""You are a recruiting assistant. Find candidates matching the role criteria below.
-
-CRITERIA:
-{criteria_text}
-
-CANDIDATES (index|name|company|former|tags|location|notes):
-{"~".join(lines)}
-
-Return ONLY a JSON array of matches with score >= 55. Max 25 results, sorted by score descending.
-[{{"index":0,"score":85,"snippet":"why they fit in one sentence","comp_found":"$X from notes or empty"}}]
-
-Return ONLY the JSON array."""
-    text = claude_request(prompt, 3000)
-    return json.loads(text)
+def score_candidate_keywords(candidate, keywords):
+    """Score a candidate based on keyword matches. Fast, no API calls."""
+    if not keywords:
+        return 0, ""
+    
+    searchable = " ".join([
+        candidate.get("notes", ""),
+        candidate.get("current_company", ""),
+        candidate.get("former_companies", ""),
+        candidate.get("tags_str", ""),
+        candidate.get("specials_str", ""),
+        candidate.get("location", ""),
+    ]).lower()
+    
+    matched = [kw for kw in keywords if kw.lower() in searchable]
+    score = len(matched)
+    
+    snippet = ""
+    if matched:
+        # Build a snippet showing which keywords matched
+        top_matches = matched[:5]
+        snippet = f"Matches: {', '.join(top_matches)}"
+    
+    return score, snippet
 
 def fetch_candidates(stages, tag_filter, special_filter, role_filter, last_contact_months):
     filters = []
@@ -144,7 +136,6 @@ def fetch_candidates(stages, tag_filter, special_filter, role_filter, last_conta
             def ms_list(k): return [i.get("name","") for i in props.get(k,{}).get("multi_select",[])]
             def status(k):
                 s = props.get(k,{}).get("status"); return s.get("name","") if s else ""
-            def loc(k): return ", ".join(i.get("name","") for i in props.get(k,{}).get("multi_select",[]))
             name_prop = props.get("\ufeffName") or props.get("Name", {})
             name = "".join(t.get("plain_text","") for t in name_prop.get("title",[])).strip()
             if not name:
@@ -159,8 +150,9 @@ def fetch_candidates(stages, tag_filter, special_filter, role_filter, last_conta
                 "tags": ms_list("Tag"),
                 "tags_str": ms("Tag"),
                 "specials": ms_list("Special"),
+                "specials_str": ms("Special"),
                 "roles": ms_list("Role"),
-                "location": loc("Current Location"),
+                "location": ", ".join(i.get("name","") for i in props.get("Current Location",{}).get("multi_select",[])),
             })
         if not data.get("has_more"):
             break
@@ -193,7 +185,7 @@ def filter_location(candidates, location):
     if not location:
         return candidates
     loc_lower = location.lower()
-    return [c for c in candidates if loc_lower in c.get("location","").lower() or loc_lower in c.get("notes","").lower() or "remote" in loc_lower]
+    return [c for c in candidates if loc_lower in c.get("location","").lower() or "remote" in loc_lower]
 
 def tag_candidate(page_id, tag_name, existing_roles):
     new_roles = list(set(existing_roles + [tag_name]))
@@ -201,12 +193,23 @@ def tag_candidate(page_id, tag_name, existing_roles):
         "properties": {"Role": {"multi_select": [{"name": r} for r in new_roles]}}
     })
 
+def extract_comp_from_notes(notes):
+    """Extract compensation from notes."""
+    match = re.search(r'COMPENSATION\s*\n?(.*?)(?:\n\n|\Z)', notes, re.DOTALL | re.IGNORECASE)
+    if match:
+        comp_text = match.group(1).strip()[:80]
+        return comp_text
+    # Fallback: look for dollar amounts
+    amounts = re.findall(r'\$\d+k(?:\s*-\s*\$?\d+k)?', notes, re.IGNORECASE)
+    return amounts[0] if amounts else ""
+
 def parse_multipart(content_type, body):
     fs = cgi.FieldStorage(fp=io.BytesIO(body), environ={
         'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': content_type, 'CONTENT_LENGTH': str(len(body))
     })
     result = {}
-    for key in ['keywords','comp_min','comp_max','location','tag_filter','special_filter','role_filter','last_contact_months','stages','mode','tag_name']:
+    for key in ['keywords','comp_min','comp_max','location','tag_filter','special_filter',
+                'role_filter','last_contact_months','stages','mode','tag_name']:
         if key in fs:
             result[key] = fs[key].value
     if 'file' in fs:
@@ -224,7 +227,7 @@ class handler(BaseHTTPRequestHandler):
                 body = self.rfile.read(cl)
                 form = parse_multipart(ct, body)
 
-                keywords = form.get('keywords','').strip()
+                keywords_text = form.get('keywords','').strip()
                 comp_min = form.get('comp_min','').strip()
                 comp_max = form.get('comp_max','').strip()
                 location = form.get('location','').strip()
@@ -247,54 +250,42 @@ class handler(BaseHTTPRequestHandler):
                     elif fn.endswith('.docx') or fn.endswith('.doc'):
                         doc_text = extract_text_from_docx(file_bytes)
 
-                # Build criteria
-                criteria_text = ""
-                use_ai = bool(doc_text or keywords)
-                if use_ai:
-                    ai = extract_criteria(doc_text, keywords)
-                    criteria_text = f"Role: {ai.get('job_title','')}. Keywords: {', '.join(ai.get('keywords',[]))}. {ai.get('summary','')} Comp: ${ai.get('comp_min',comp_min)}k-${ai.get('comp_max',comp_max)}k. Location: {ai.get('location','') or location}."
-                    if not comp_min and ai.get('comp_min'): comp_min = str(ai['comp_min'])
-                    if not comp_max and ai.get('comp_max'): comp_max = str(ai['comp_max'])
-                    if not location and ai.get('location'): location = ai['location']
+                # Build keyword list from doc + notes
+                all_text = " ".join([doc_text, keywords_text])
+                keywords = extract_keywords(all_text) if all_text.strip() else []
 
-                # Fetch and filter
+                # Fetch and filter candidates
                 candidates = fetch_candidates(stages, tag_filter, special_filter, role_filter, last_contact)
                 if location:
                     candidates = filter_location(candidates, location)
                 if comp_min or comp_max:
                     candidates = filter_comp(candidates, comp_min, comp_max)
 
+                # Score by keyword match
                 results = []
-                if use_ai and candidates:
-                    # Score in batches of 50
-                    all_scored = []
-                    for i in range(0, min(len(candidates), 150), 50):
-                        batch = candidates[i:i+50]
-                        try:
-                            scored = batch_score(batch, criteria_text)
-                            for s in scored:
-                                idx = s.get('index', 0)
-                                if 0 <= idx < len(batch):
-                                    c = batch[idx]
-                                    all_scored.append({
-                                        "id": c["id"], "name": c["name"],
-                                        "current_company": c["current_company"],
-                                        "location": c["location"], "stage": c["stage"],
-                                        "comp": s.get('comp_found',''), "tags": c["tags"],
-                                        "snippet": s.get('snippet',''),
-                                        "score": s.get('score',0),
-                                        "existing_roles": c["roles"]
-                                    })
-                        except Exception:
-                            pass
-                    all_scored.sort(key=lambda x: x.get('score',0), reverse=True)
-                    results = all_scored[:30]
+                if keywords:
+                    scored = []
+                    for c in candidates:
+                        score, snippet = score_candidate_keywords(c, keywords)
+                        if score > 0:
+                            scored.append({
+                                "id": c["id"], "name": c["name"],
+                                "current_company": c["current_company"],
+                                "location": c["location"], "stage": c["stage"],
+                                "comp": extract_comp_from_notes(c["notes"]),
+                                "tags": c["tags"], "snippet": snippet,
+                                "score": score, "existing_roles": c["roles"]
+                            })
+                    scored.sort(key=lambda x: x["score"], reverse=True)
+                    results = scored[:100]
                 else:
+                    # No keywords — return all filtered candidates
                     results = [{
                         "id": c["id"], "name": c["name"],
                         "current_company": c["current_company"],
                         "location": c["location"], "stage": c["stage"],
-                        "comp": "", "tags": c["tags"], "snippet": "",
+                        "comp": extract_comp_from_notes(c["notes"]),
+                        "tags": c["tags"], "snippet": "",
                         "existing_roles": c["roles"]
                     } for c in candidates]
 
