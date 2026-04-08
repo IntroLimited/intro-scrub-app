@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Intro — Tracker Scrub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --black: #0a0a0a; --white: #f5f3ef; --stone: #c8c2b4;
+      --accent: #8b6f47; --green: #4a7c59; --red: #7c4a4a; --border: rgba(255,255,255,0.08);
+    }
+    html, body { background: var(--black); color: var(--white); font-family: 'Cormorant Garamond', Georgia, serif; min-height: 100vh; }
+    body { display: flex; flex-direction: column; align-items: center; padding: 3rem 1.5rem 5rem; }
+    body::before { content: ''; position: fixed; inset: 0; background: radial-gradient(ellipse 80% 50% at 80% 10%, rgba(139,111,71,0.04) 0%, transparent 60%); pointer-events: none; }
+    .container { width: 100%; max-width: 680px; position: relative; z-index: 1; }
+    header { margin-bottom: 2rem; text-align: center; }
+    .wordmark { font-size: 0.65rem; font-family: 'DM Mono', monospace; letter-spacing: 0.35em; text-transform: uppercase; color: var(--stone); margin-bottom: 1.25rem; }
+    h1 { font-size: clamp(2rem, 5vw, 2.8rem); font-weight: 300; }
+    h1 em { font-style: italic; color: var(--accent); }
+    .subtitle { margin-top: 0.6rem; font-size: 0.95rem; color: var(--stone); font-style: italic; }
+    .rule { width: 36px; height: 1px; background: var(--accent); margin: 1.75rem auto; opacity: 0.4; }
+    .card { background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 2px; padding: 2rem; margin-bottom: 1rem; }
+    .card-title { font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(200,194,180,0.45); margin-bottom: 1.5rem; }
+    .field { margin-bottom: 1.4rem; }
+    .field:last-child { margin-bottom: 0; }
+    label { display: block; font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--stone); margin-bottom: 0.5rem; }
+    .optional { opacity: 0.45; font-size: 0.52rem; margin-left: 0.4rem; }
+    input[type="text"], input[type="number"], select, textarea {
+      width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 1px; padding: 0.7rem 1rem; font-family: 'Cormorant Garamond', serif;
+      font-size: 1.05rem; color: var(--white); outline: none; transition: border-color 0.2s;
+    }
+    input[type="text"]::placeholder, textarea::placeholder { color: rgba(200,194,180,0.3); font-style: italic; }
+    input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:focus { border-color: rgba(139,111,71,0.45); }
+    textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+    .select-wrap { position: relative; }
+    .select-wrap::after { content: '↓'; position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); color: var(--stone); font-size: 0.8rem; pointer-events: none; font-family: 'DM Mono', monospace; }
+    select { cursor: pointer; padding-right: 2.5rem; -webkit-appearance: none; appearance: none; }
+    select option { background: #1a1714; color: var(--white); }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .upload-zone {
+      border: 1px dashed rgba(255,255,255,0.15); border-radius: 2px; padding: 1.5rem;
+      text-align: center; cursor: pointer; transition: all 0.2s; position: relative;
+    }
+    .upload-zone:hover, .upload-zone.dragover { border-color: rgba(139,111,71,0.45); background: rgba(139,111,71,0.04); }
+    .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+    .upload-icon { font-size: 1.4rem; margin-bottom: 0.5rem; opacity: 0.4; }
+    .upload-text { font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.1em; color: var(--stone); }
+    .upload-file-name { font-size: 0.85rem; color: var(--accent); margin-top: 0.4rem; font-style: italic; }
+    .mode-toggle { display: flex; gap: 0; border: 1px solid rgba(255,255,255,0.09); border-radius: 1px; overflow: hidden; }
+    .mode-btn { flex: 1; padding: 0.65rem; font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.15em; text-transform: uppercase; background: transparent; border: none; color: var(--stone); cursor: pointer; transition: all 0.2s; }
+    .mode-btn.active { background: rgba(139,111,71,0.15); color: var(--white); }
+    .tag-section { display: none; margin-top: 1rem; }
+    .tag-section.visible { display: block; }
+    .stage-checkboxes { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+    .stage-cb { display: flex; align-items: center; gap: 0.4rem; font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--stone); cursor: pointer; }
+    .stage-cb input { width: 12px; height: 12px; accent-color: var(--accent); }
+    .btn { width: 100%; padding: 1rem; background: var(--accent); border: none; border-radius: 1px; font-family: 'DM Mono', monospace; font-size: 0.68rem; letter-spacing: 0.25em; text-transform: uppercase; color: #0a0a0a; cursor: pointer; transition: all 0.2s; margin-top: 0.5rem; }
+    .btn:hover:not(:disabled) { background: #9d7f55; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .status { margin-top: 1.25rem; padding: 0.9rem 1.1rem; border-radius: 1px; font-size: 0.9rem; line-height: 1.6; display: none; }
+    .status.visible { display: block; }
+    .status.processing { background: rgba(139,111,71,0.07); border: 1px solid rgba(139,111,71,0.18); color: var(--stone); font-style: italic; }
+    .status.error { background: rgba(124,74,74,0.08); border: 1px solid rgba(124,74,74,0.25); color: #c07878; }
+    .spinner { display: inline-block; width: 12px; height: 12px; border: 1px solid rgba(139,111,71,0.25); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.75s linear infinite; vertical-align: middle; margin-right: 0.5rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .results-section { display: none; margin-top: 1.5rem; }
+    .results-section.visible { display: block; }
+    .results-header { font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--stone); margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+    .results-count { color: var(--accent); }
+    .candidate-card { background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 2px; padding: 1.25rem; margin-bottom: 0.75rem; }
+    .candidate-name { font-size: 1.2rem; font-weight: 400; margin-bottom: 0.4rem; }
+    .candidate-meta { font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--stone); letter-spacing: 0.08em; margin-bottom: 0.6rem; line-height: 1.8; }
+    .candidate-meta span { color: rgba(200,194,180,0.5); margin: 0 0.3rem; }
+    .candidate-snippet { font-size: 0.88rem; color: rgba(245,243,239,0.65); line-height: 1.6; font-style: italic; border-left: 2px solid rgba(139,111,71,0.3); padding-left: 0.75rem; margin-top: 0.5rem; }
+    .tag-badge { display: inline-block; font-family: 'DM Mono', monospace; font-size: 0.52rem; letter-spacing: 0.08em; padding: 0.2rem 0.5rem; border: 1px solid rgba(139,111,71,0.3); border-radius: 1px; color: var(--accent); margin-right: 0.3rem; margin-top: 0.3rem; }
+    .tagged-badge { background: rgba(74,124,89,0.1); border-color: rgba(74,124,89,0.3); color: #7fba94; }
+    footer { margin-top: 3rem; text-align: center; font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(200,194,180,0.18); }
+    @media (max-width: 520px) { body { padding: 2rem 1rem 4rem; } .card { padding: 1.5rem 1.25rem; } .row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <p class="wordmark">Intro Limited</p>
+      <h1>Tracker <em>Scrub</em></h1>
+      <p class="subtitle">Surface candidates from the database using any combination of filters.</p>
+    </header>
+    <div class="rule"></div>
+
+    <!-- Upload Section -->
+    <div class="card">
+      <p class="card-title">Documents <span class="optional">optional</span></p>
+      <div class="field">
+        <label>Job Description or Brief <span class="optional">optional — PDF or Word doc</span></label>
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="fileInput" accept=".pdf,.doc,.docx" onchange="handleFileSelect(this)">
+          <div class="upload-icon">↑</div>
+          <div class="upload-text">Drop a file here or click to browse</div>
+          <div class="upload-file-name" id="fileName"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Additional Notes <span class="optional">optional — paste any extra context</span></label>
+        <textarea id="keywords" placeholder="e.g. Looking for someone with Klaviyo experience, DTC background, open to hybrid..."></textarea>
+      </div>
+    </div>
+
+    <!-- Filters Section -->
+    <div class="card">
+      <p class="card-title">Filters <span class="optional">all optional</span></p>
+
+      <div class="field row">
+        <div>
+          <label>Comp Min <span class="optional">$k</span></label>
+          <input type="number" id="compMin" placeholder="e.g. 85" />
+        </div>
+        <div>
+          <label>Comp Max <span class="optional">$k</span></label>
+          <input type="number" id="compMax" placeholder="e.g. 115" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Location <span class="optional">city, state, or region</span></label>
+        <input type="text" id="location" placeholder="e.g. Los Angeles, New York, Remote" />
+      </div>
+
+      <div class="field">
+        <label>Tag <span class="optional">function area</span></label>
+        <div class="select-wrap">
+          <select id="tagFilter">
+            <option value="">Any tag</option>
+            <option>CEO / President / GM</option>
+            <option>Design</option>
+            <option>Marketing</option>
+            <option>Merchandising</option>
+            <option>Operations</option>
+            <option>Planning</option>
+            <option>HR</option>
+            <option>Sales</option>
+            <option>Finance</option>
+            <option>Technology</option>
+            <option>Creative</option>
+            <option>Product</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Special <span class="optional">skill or category</span></label>
+        <div class="select-wrap">
+          <select id="specialFilter">
+            <option value="">Any</option>
+            <option>GM</option>
+            <option>Growth</option>
+            <option>Lead / Leader</option>
+            <option>P&L ownership</option>
+            <option>Creative Director</option>
+            <option>eCommerce</option>
+            <option>DTC</option>
+            <option>Luxury</option>
+            <option>Startup</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Previously Considered For <span class="optional">role tag</span></label>
+        <input type="text" id="roleFilter" placeholder="e.g. Gold Union - General Manager" />
+      </div>
+
+      <div class="field">
+        <label>Last Contacted <span class="optional">for reconnect scrubs</span></label>
+        <div class="select-wrap">
+          <select id="lastContact">
+            <option value="">Any time</option>
+            <option value="6">6+ months ago</option>
+            <option value="12">12+ months ago</option>
+            <option value="18">18+ months ago</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Stage Filter</label>
+        <div class="stage-checkboxes">
+          <label class="stage-cb"><input type="checkbox" value="Intro Interviewed" checked> Intro Interviewed</label>
+          <label class="stage-cb"><input type="checkbox" value="Connection" checked> Connection</label>
+          <label class="stage-cb"><input type="checkbox" value="Intro Dismissed"> Dismissed</label>
+          <label class="stage-cb"><input type="checkbox" value="Remove him/herself"> Removed</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results Mode -->
+    <div class="card">
+      <p class="card-title">Results</p>
+      <div class="field">
+        <label>What to do with results</label>
+        <div class="mode-toggle">
+          <button class="mode-btn active" onclick="setMode('view')" id="modeView">View only</button>
+          <button class="mode-btn" onclick="setMode('tag')" id="modeTag">Tag in Notion</button>
+        </div>
+      </div>
+      <div class="tag-section" id="tagSection">
+        <div class="field">
+          <label>Tag name to apply <span class="optional">will be created if it doesn't exist</span></label>
+          <input type="text" id="tagName" placeholder="e.g. Cotton Citizen - Lifecycle Marketing" />
+        </div>
+      </div>
+    </div>
+
+    <button class="btn" id="scrubBtn" onclick="runScrub()">Run Scrub</button>
+    <div class="status" id="status"></div>
+
+    <!-- Results -->
+    <div class="results-section" id="resultsSection">
+      <div class="results-header">
+        <span>Results</span>
+        <span class="results-count" id="resultsCount"></span>
+      </div>
+      <div id="resultsList"></div>
+    </div>
+
+    <footer>Intro Limited &nbsp;·&nbsp; Internal Tool</footer>
+  </div>
+
+  <script>
+    let selectedFile = null;
+    let currentMode = 'view';
+
+    function handleFileSelect(input) {
+      if (input.files && input.files[0]) {
+        selectedFile = input.files[0];
+        document.getElementById('fileName').textContent = selectedFile.name;
+      }
+    }
+
+    const uploadZone = document.getElementById('uploadZone');
+    uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+    uploadZone.addEventListener('drop', e => {
+      e.preventDefault();
+      uploadZone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        selectedFile = file;
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileInput').files = e.dataTransfer.files;
+      }
+    });
+
+    function setMode(mode) {
+      currentMode = mode;
+      document.getElementById('modeView').classList.toggle('active', mode === 'view');
+      document.getElementById('modeTag').classList.toggle('active', mode === 'tag');
+      document.getElementById('tagSection').classList.toggle('visible', mode === 'tag');
+    }
+
+    function getCheckedStages() {
+      return Array.from(document.querySelectorAll('.stage-cb input:checked')).map(cb => cb.value);
+    }
+
+    function setStatus(type, html) {
+      const el = document.getElementById('status');
+      el.className = 'status visible ' + type;
+      el.innerHTML = html;
+    }
+
+    async function runScrub() {
+      const btn = document.getElementById('scrubBtn');
+      const keywords = document.getElementById('keywords').value.trim();
+      const compMin = document.getElementById('compMin').value;
+      const compMax = document.getElementById('compMax').value;
+      const location = document.getElementById('location').value.trim();
+      const tagFilter = document.getElementById('tagFilter').value;
+      const specialFilter = document.getElementById('specialFilter').value;
+      const roleFilter = document.getElementById('roleFilter').value.trim();
+      const lastContact = document.getElementById('lastContact').value;
+      const stages = getCheckedStages();
+      const tagName = document.getElementById('tagName').value.trim();
+
+      if (currentMode === 'tag' && !tagName) {
+        setStatus('error', 'Please enter a tag name to apply to results.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Scrubbing…';
+      document.getElementById('resultsSection').classList.remove('visible');
+      setStatus('processing', '<span class="spinner"></span> Reading criteria and searching the tracker — this may take a minute…');
+
+      const formData = new FormData();
+      if (selectedFile) formData.append('file', selectedFile);
+      formData.append('keywords', keywords);
+      formData.append('comp_min', compMin);
+      formData.append('comp_max', compMax);
+      formData.append('location', location);
+      formData.append('tag_filter', tagFilter);
+      formData.append('special_filter', specialFilter);
+      formData.append('role_filter', roleFilter);
+      formData.append('last_contact_months', lastContact);
+      formData.append('stages', JSON.stringify(stages));
+      formData.append('mode', currentMode);
+      formData.append('tag_name', tagName);
+
+      try {
+        const res = await fetch('/api/scrub', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+        showResults(data.results, data.tagged_count);
+        document.getElementById('status').className = 'status';
+      } catch(err) {
+        setStatus('error', '✗ ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run Scrub';
+      }
+    }
+
+    function showResults(results, taggedCount) {
+      const section = document.getElementById('resultsSection');
+      const list = document.getElementById('resultsList');
+      const count = document.getElementById('resultsCount');
+
+      count.textContent = results.length + ' candidate' + (results.length !== 1 ? 's' : '') + ' found' + (taggedCount ? ` · ${taggedCount} tagged in Notion` : '');
+
+      list.innerHTML = results.map(r => `
+        <div class="candidate-card">
+          <div class="candidate-name">${r.name}</div>
+          <div class="candidate-meta">
+            ${r.current_company ? r.current_company : ''}
+            ${r.location ? `<span>·</span>${r.location}` : ''}
+            ${r.stage ? `<span>·</span>${r.stage}` : ''}
+            ${r.comp ? `<span>·</span>${r.comp}` : ''}
+          </div>
+          ${r.tags ? r.tags.map(t => `<span class="tag-badge">${t}</span>`).join('') : ''}
+          ${r.tagged ? `<span class="tag-badge tagged-badge">✓ Tagged</span>` : ''}
+          ${r.snippet ? `<div class="candidate-snippet">${r.snippet}</div>` : ''}
+        </div>
+      `).join('');
+
+      section.classList.add('visible');
+    }
+  </script>
+</body>
+</html>
